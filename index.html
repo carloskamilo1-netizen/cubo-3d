@@ -3,7 +3,11 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
   <title>Laboratorio 3D</title>
+  <!-- VERSION: 2026-09-08-v3-ipad -->
   <link rel="manifest" href="manifest.json">
   <meta name="theme-color" content="#7b2ff7">
   <meta name="apple-mobile-web-app-capable" content="yes">
@@ -12,12 +16,17 @@
   <meta name="apple-mobile-web-app-title" content="Laboratorio 3D">
   <link rel="apple-touch-icon" href="icono-192.png">
   <script>
-    // Desregistrar SW antiguos para evitar caché del juego viejo en iPad
+    // VERSION DEL JUEGO: 2026-09-08-v3-ipad
+    window.LAB3D_VERSION = '2026-09-08-v3-ipad';
+    console.log('Laboratorio 3D versión', window.LAB3D_VERSION);
+    // Quitar solo el service worker de ESTA página (no toca bancos ni otros sitios)
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.getRegistrations().then(regs => {
         regs.forEach(r => r.unregister());
       }).catch(() => {});
-      // Si quieres PWA de nuevo, vuelve a registrar service-worker.js tras limpiar caché
+    }
+    if (window.caches) {
+      caches.keys().then(keys => keys.forEach(k => caches.delete(k))).catch(() => {});
     }
   </script>
   <style>
@@ -318,6 +327,7 @@
     <header>
       <h1>🧩 Laboratorio 3D</h1>
       <button class="boton-accion" id="btn-inicio" style="background:#7b2ff7; padding:4px 12px; font-size:14px;">🏠 Inicio</button>
+      <span id="badge-version" style="margin-left:auto;font-size:11px;opacity:0.7;color:#7ef9ff;">2026-09-08-v3-ipad</span>
     </header>
 
     <!-- PANTALLA DE MUNDOS -->
