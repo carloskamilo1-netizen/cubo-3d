@@ -2,12 +2,12 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
   <title>Laboratorio 3D</title>
-  <!-- VERSION: 2026-09-08-v3-ipad -->
+  <!-- VERSION: 2026-09-08-v4-nozoom -->
   <link rel="manifest" href="manifest.json">
   <meta name="theme-color" content="#7b2ff7">
   <meta name="apple-mobile-web-app-capable" content="yes">
@@ -16,8 +16,8 @@
   <meta name="apple-mobile-web-app-title" content="Laboratorio 3D">
   <link rel="apple-touch-icon" href="icono-192.png">
   <script>
-    // VERSION DEL JUEGO: 2026-09-08-v3-ipad
-    window.LAB3D_VERSION = '2026-09-08-v3-ipad';
+    // VERSION DEL JUEGO: 2026-09-08-v4-nozoom
+    window.LAB3D_VERSION = '2026-09-08-v4-nozoom';
     console.log('Laboratorio 3D versión', window.LAB3D_VERSION);
     // Quitar solo el service worker de ESTA página (no toca bancos ni otros sitios)
     if ('serviceWorker' in navigator) {
@@ -28,6 +28,19 @@
     if (window.caches) {
       caches.keys().then(keys => keys.forEach(k => caches.delete(k))).catch(() => {});
     }
+    // Bloquear zoom de página de Safari (pellizco / doble toque / gesture)
+    document.addEventListener('gesturestart', function (e) { e.preventDefault(); }, { passive: false });
+    document.addEventListener('gesturechange', function (e) { e.preventDefault(); }, { passive: false });
+    document.addEventListener('gestureend', function (e) { e.preventDefault(); }, { passive: false });
+    // Evitar zoom por doble toque en iOS
+    var lastTouchEnd = 0;
+    document.addEventListener('touchend', function (e) {
+      var now = Date.now();
+      if (now - lastTouchEnd <= 300) {
+        e.preventDefault();
+      }
+      lastTouchEnd = now;
+    }, { passive: false });
   </script>
   <style>
     /* --- ESTILOS COMPACTOS + SOPORTE IPAD/TOUCH --- */
@@ -36,6 +49,13 @@
       margin: 0;
       padding: 0;
       -webkit-tap-highlight-color: transparent;
+      -webkit-touch-callout: none;
+      -webkit-user-select: none;
+      user-select: none;
+    }
+    input, textarea {
+      -webkit-user-select: text;
+      user-select: text;
     }
     html, body {
       height: 100%;
@@ -265,10 +285,15 @@
     .candado { font-size: 24px; margin-left: 8px; }
 
     /* Canvas: evita gestos del navegador sobre el área 3D */
-    #canvas-principal, #canvas-objetivo {
+    #canvas-principal, #canvas-objetivo, .tarjeta-canvas, #contenedor-escenas, #pantalla-juego, #app {
       touch-action: none;
       -webkit-user-select: none;
       user-select: none;
+      -webkit-touch-callout: none;
+    }
+    #canvas-principal {
+      /* iOS: evita magnifier / callout al mantener pulsado */
+      -webkit-user-drag: none;
     }
     .boton-emoji, .boton-accion, .tarjeta-mundo {
       touch-action: manipulation;
@@ -327,7 +352,7 @@
     <header>
       <h1>🧩 Laboratorio 3D</h1>
       <button class="boton-accion" id="btn-inicio" style="background:#7b2ff7; padding:4px 12px; font-size:14px;">🏠 Inicio</button>
-      <span id="badge-version" style="margin-left:auto;font-size:11px;opacity:0.7;color:#7ef9ff;">2026-09-08-v3-ipad</span>
+      <span id="badge-version" style="margin-left:auto;font-size:11px;opacity:0.7;color:#7ef9ff;">2026-09-08-v4-nozoom</span>
     </header>
 
     <!-- PANTALLA DE MUNDOS -->
@@ -977,7 +1002,7 @@
     function actualizarOrbitDesdePuntero(x, y) {
       const dx = x - inicioArrastre.x;
       const dy = y - inicioArrastre.y;
-      if (Math.abs(dx) > 6 || Math.abs(dy) > 6) huboMovimiento = true;
+      if (Math.abs(dx) > 10 || Math.abs(dy) > 10) huboMovimiento = true;
       orbit.theta = anguloInicio.theta - dx * 0.01;
       orbit.phi = Math.min(Math.max(anguloInicio.phi - dy * 0.01, 0.25), Math.PI - 0.25);
     }
@@ -1018,12 +1043,17 @@
       }
 
       if (pointersActivos.size === 2) {
+        // Solo zoom de cámara 3D (no de la página). Requiere cambio claro de distancia.
         const pts = Array.from(pointersActivos.values());
         const dx = pts[0].x - pts[1].x;
         const dy = pts[0].y - pts[1].y;
         const d = Math.sqrt(dx * dx + dy * dy) || 1;
         if (pinchDistInicial > 0) {
-          orbit.radio = Math.min(Math.max(radioInicialPinch * (pinchDistInicial / d), 4), 14);
+          const ratio = pinchDistInicial / d;
+          // Ignorar micro-movimientos (dedo tembloroso / apoyo accidental)
+          if (Math.abs(ratio - 1) > 0.04) {
+            orbit.radio = Math.min(Math.max(radioInicialPinch * ratio, 4), 14);
+          }
         }
         huboMovimiento = true;
         return;
