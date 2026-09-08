@@ -971,46 +971,46 @@
     // la compatibilidad con mouse (para escritorio).
     // Para iPad: touchstart, touchmove, touchend.
 
-    let touchStartX = 0,
-      touchStartY = 0;
-    let touchThetaStart = 0,
-      touchPhiStart = 0;
-    let isTouching = false;
+let touchStartX = 0, touchStartY = 0;
+let touchThetaStart = 0, touchPhiStart = 0;
+let isTouching = false;
+let huboMovimientoTactil = false;
 
-    canvasPrincipal.addEventListener('touchstart', (e) => {
-      e.preventDefault();
-      const touch = e.touches[0];
-      if (!touch) return;
-      isTouching = true;
-      touchStartX = touch.clientX;
-      touchStartY = touch.clientY;
-      touchThetaStart = orbit.theta;
-      touchPhiStart = orbit.phi;
-    }, { passive: false });
+canvasPrincipal.addEventListener('touchstart', (e) => {
+  e.preventDefault();
+  const touch = e.touches[0];
+  if (!touch) return;
+  isTouching = true;
+  huboMovimientoTactil = false;
+  touchStartX = touch.clientX;
+  touchStartY = touch.clientY;
+  touchThetaStart = orbit.theta;
+  touchPhiStart = orbit.phi;
+}, { passive: false });
 
-    canvasPrincipal.addEventListener('touchmove', (e) => {
-      e.preventDefault();
-      if (!isTouching) return;
-      const touch = e.touches[0];
-      if (!touch) return;
-      const dx = touch.clientX - touchStartX;
-      const dy = touch.clientY - touchStartY;
-      if (Math.abs(dx) > 4 || Math.abs(dy) > 4) {
-        orbit.theta = touchThetaStart - dx * 0.008;
-        orbit.phi = Math.min(Math.max(touchPhiStart - dy * 0.008, 0.3), Math.PI - 0.3);
-      }
-    }, { passive: false });
+canvasPrincipal.addEventListener('touchmove', (e) => {
+  e.preventDefault();
+  if (!isTouching) return;
+  const touch = e.touches[0];
+  if (!touch) return;
+  const dx = touch.clientX - touchStartX;
+  const dy = touch.clientY - touchStartY;
+  if (Math.abs(dx) > 4 || Math.abs(dy) > 4) {
+    huboMovimientoTactil = true;
+    orbit.theta = touchThetaStart - dx * 0.008;
+    orbit.phi = Math.min(Math.max(touchPhiStart - dy * 0.008, 0.3), Math.PI - 0.3);
+  }
+}, { passive: false });
 
-    canvasPrincipal.addEventListener('touchend', (e) => {
-      e.preventDefault();
-      // Si no hubo movimiento significativo, lo interpretamos como clic/tap
-      if (isTouching && e.changedTouches.length > 0) {
-        const touch = e.changedTouches[0];
-        // Simulamos un clic en la posición del toque
-        manejarClicTactil(touch.clientX, touch.clientY);
-      }
-      isTouching = false;
-    }, { passive: false });
+canvasPrincipal.addEventListener('touchend', (e) => {
+  e.preventDefault();
+  if (isTouching && e.changedTouches.length > 0 && !huboMovimientoTactil) {
+    const touch = e.changedTouches[0];
+    manejarClicTactil(touch.clientX, touch.clientY);
+    sonidoClic();
+  }
+  isTouching = false;
+}, { passive: false });
 
     // También soportamos mouse para escritorio
     let mouseDown = false;
