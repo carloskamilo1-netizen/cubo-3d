@@ -12,10 +12,12 @@
   <meta name="apple-mobile-web-app-title" content="Laboratorio 3D">
   <link rel="apple-touch-icon" href="icono-192.png">
   <script>
+    // Desregistrar SW antiguos para evitar caché del juego viejo en iPad
     if ('serviceWorker' in navigator) {
-      window.addEventListener('load', () => {
-        navigator.serviceWorker.register('service-worker.js').catch(() => {});
-      });
+      navigator.serviceWorker.getRegistrations().then(regs => {
+        regs.forEach(r => r.unregister());
+      }).catch(() => {});
+      // Si quieres PWA de nuevo, vuelve a registrar service-worker.js tras limpiar caché
     }
   </script>
   <style>
@@ -29,24 +31,43 @@
     html, body {
       height: 100%;
       height: 100dvh;
+      max-height: 100dvh;
       overflow: hidden;
       background: #0b0620;
       font-family: 'Segoe UI', Tahoma, sans-serif;
       color: white;
       position: fixed;
+      inset: 0;
       width: 100%;
       overscroll-behavior: none;
+      -webkit-text-size-adjust: 100%;
     }
     #app {
       display: flex;
       flex-direction: column;
       height: 100%;
-      height: 100dvh;
-      padding: 6px 12px;
-      padding-top: max(6px, env(safe-area-inset-top));
-      padding-bottom: max(8px, env(safe-area-inset-bottom));
-      padding-left: max(12px, env(safe-area-inset-left));
-      padding-right: max(12px, env(safe-area-inset-right));
+      max-height: 100dvh;
+      padding: 4px 10px;
+      padding-top: max(4px, env(safe-area-inset-top, 0px));
+      padding-bottom: max(6px, env(safe-area-inset-bottom, 0px));
+      padding-left: max(10px, env(safe-area-inset-left, 0px));
+      padding-right: max(10px, env(safe-area-inset-right, 0px));
+      overflow: hidden;
+    }
+    #pantalla-juego {
+      flex-direction: column;
+      flex: 1 1 auto;
+      min-height: 0;
+      overflow: hidden;
+    }
+    #controles-inferiores {
+      flex: 0 0 auto;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      padding-top: 4px;
+      background: rgba(11, 6, 32, 0.95);
+      z-index: 20;
     }
     header {
       display: flex;
@@ -83,9 +104,11 @@
     #contenedor-escenas {
       display: flex;
       flex: 1 1 auto;
-      gap: 14px;
+      gap: 10px;
       min-height: 0;
+      max-height: 100%;
       width: 100%;
+      overflow: hidden;
     }
     .tarjeta-canvas {
       background: rgba(10, 5, 25, 0.6);
@@ -104,7 +127,8 @@
     }
     .tarjeta-canvas.objetivo {
       flex: 0 0 32%;
-      min-width: 280px;
+      min-width: 0;
+      max-width: 40%;
     }
     .tarjeta-canvas canvas {
       display: block;
@@ -303,7 +327,7 @@
     </div>
 
     <!-- PANTALLA DE JUEGO -->
-    <div id="pantalla-juego" style="display: flex; flex-direction: column; flex: 1; min-height: 0;">
+    <div id="pantalla-juego">
       <div id="panel-nivel">
         <h2 id="titulo-nivel"></h2>
         <div id="progreso"></div>
@@ -319,15 +343,16 @@
         </div>
       </div>
 
-      <div id="mensaje-victoria">⭐ ¡MUY BIEN! ⭐</div>
-      <div id="mensaje-ayuda">Toca una pieza, luego toca otra vez para confirmar el emoji.</div>
-
-      <div class="barra" id="barra-emojis"></div>
-      <div class="barra">
-        <button class="boton-accion" id="btn-reiniciar">🔄 Reiniciar</button>
-        <button class="boton-accion" id="btn-undo">↩ Deshacer</button>
-        <button class="boton-accion" id="btn-pista">💡 Pista</button>
-        <button class="boton-accion" id="btn-siguiente">➡ Siguiente</button>
+      <div id="controles-inferiores">
+        <div id="mensaje-victoria">⭐ ¡MUY BIEN! ⭐</div>
+        <div id="mensaje-ayuda">Toca una pieza, luego toca otra vez para confirmar el emoji.</div>
+        <div class="barra" id="barra-emojis"></div>
+        <div class="barra">
+          <button class="boton-accion" id="btn-reiniciar">🔄 Reiniciar</button>
+          <button class="boton-accion" id="btn-undo">↩ Deshacer</button>
+          <button class="boton-accion" id="btn-pista">💡 Pista</button>
+          <button class="boton-accion" id="btn-siguiente">➡ Siguiente</button>
+        </div>
       </div>
     </div>
   </div>
@@ -915,118 +940,134 @@
     }
 
     // ============================================================
-    // 10. INTERACCIÓN MOUSE + TOUCH (iPad / móviles)
+    // 10. INTERACCIÓN CON POINTER EVENTS (ratón + dedo iPad)
     // ============================================================
     const raycaster = new THREE.Raycaster();
     const mouseNDC = new THREE.Vector2();
     let arrastrando = false;
+    let pointerIdActivo = null;
     let inicioArrastre = { x: 0, y: 0 };
     let anguloInicio = { theta: 0, phi: 0 };
     let huboMovimiento = false;
     let pinchDistInicial = 0;
     let radioInicialPinch = 0;
+    const pointersActivos = new Map();
 
     function getClientXY(e) {
+      if (e.clientX != null) return { x: e.clientX, y: e.clientY };
       if (e.touches && e.touches.length > 0) {
         return { x: e.touches[0].clientX, y: e.touches[0].clientY };
       }
       if (e.changedTouches && e.changedTouches.length > 0) {
         return { x: e.changedTouches[0].clientX, y: e.changedTouches[0].clientY };
       }
-      return { x: e.clientX, y: e.clientY };
+      return { x: 0, y: 0 };
     }
 
-    function distanciaToques(t1, t2) {
-      const dx = t1.clientX - t2.clientX;
-      const dy = t1.clientY - t2.clientY;
-      return Math.sqrt(dx * dx + dy * dy);
+    function actualizarOrbitDesdePuntero(x, y) {
+      const dx = x - inicioArrastre.x;
+      const dy = y - inicioArrastre.y;
+      if (Math.abs(dx) > 6 || Math.abs(dy) > 6) huboMovimiento = true;
+      orbit.theta = anguloInicio.theta - dx * 0.01;
+      orbit.phi = Math.min(Math.max(anguloInicio.phi - dy * 0.01, 0.25), Math.PI - 0.25);
     }
 
-    function iniciarArrastre(e) {
-      const p = getClientXY(e);
+    function onPointerDown(e) {
+      // Solo botón principal / toque
+      if (e.pointerType === 'mouse' && e.button !== 0) return;
+      e.preventDefault();
+      try { canvasPrincipal.setPointerCapture(e.pointerId); } catch (_) {}
+
+      pointersActivos.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+      if (pointersActivos.size === 2) {
+        const pts = Array.from(pointersActivos.values());
+        const dx = pts[0].x - pts[1].x;
+        const dy = pts[0].y - pts[1].y;
+        pinchDistInicial = Math.sqrt(dx * dx + dy * dy) || 1;
+        radioInicialPinch = orbit.radio;
+        huboMovimiento = true;
+        arrastrando = true;
+        pointerIdActivo = null;
+        return;
+      }
+
       arrastrando = true;
+      pointerIdActivo = e.pointerId;
       huboMovimiento = false;
-      inicioArrastre = { x: p.x, y: p.y };
+      inicioArrastre = { x: e.clientX, y: e.clientY };
       anguloInicio = { theta: orbit.theta, phi: orbit.phi };
     }
 
-    function moverArrastre(e) {
+    function onPointerMove(e) {
       if (!arrastrando) return;
-      // Pinch (2 dedos) = zoom
-      if (e.touches && e.touches.length === 2) {
-        const d = distanciaToques(e.touches[0], e.touches[1]);
+      e.preventDefault();
+
+      if (pointersActivos.has(e.pointerId)) {
+        pointersActivos.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      }
+
+      if (pointersActivos.size === 2) {
+        const pts = Array.from(pointersActivos.values());
+        const dx = pts[0].x - pts[1].x;
+        const dy = pts[0].y - pts[1].y;
+        const d = Math.sqrt(dx * dx + dy * dy) || 1;
         if (pinchDistInicial > 0) {
-          const factor = pinchDistInicial / d;
-          orbit.radio = Math.min(Math.max(radioInicialPinch * factor, 4), 14);
+          orbit.radio = Math.min(Math.max(radioInicialPinch * (pinchDistInicial / d), 4), 14);
         }
         huboMovimiento = true;
         return;
       }
-      const p = getClientXY(e);
-      const dx = p.x - inicioArrastre.x;
-      const dy = p.y - inicioArrastre.y;
-      if (Math.abs(dx) > 4 || Math.abs(dy) > 4) huboMovimiento = true;
-      orbit.theta = anguloInicio.theta - dx * 0.008;
-      orbit.phi = Math.min(Math.max(anguloInicio.phi - dy * 0.008, 0.3), Math.PI - 0.3);
+
+      if (pointerIdActivo !== null && e.pointerId !== pointerIdActivo) return;
+      actualizarOrbitDesdePuntero(e.clientX, e.clientY);
     }
 
-    function finalizarArrastre(e) {
-      if (!arrastrando) return;
+    function onPointerUp(e) {
+      e.preventDefault();
+      pointersActivos.delete(e.pointerId);
+      try { canvasPrincipal.releasePointerCapture(e.pointerId); } catch (_) {}
+
+      if (pointersActivos.size === 1) {
+        // Queda un dedo: reiniciar órbita con ese puntero
+        const [id, pt] = Array.from(pointersActivos.entries())[0];
+        pointerIdActivo = id;
+        inicioArrastre = { x: pt.x, y: pt.y };
+        anguloInicio = { theta: orbit.theta, phi: orbit.phi };
+        pinchDistInicial = 0;
+        huboMovimiento = true;
+        return;
+      }
+
+      if (pointersActivos.size > 0) return;
+
+      const fueArrastre = arrastrando;
+      const movio = huboMovimiento;
       arrastrando = false;
+      pointerIdActivo = null;
       pinchDistInicial = 0;
-      if (!huboMovimiento) {
+
+      if (fueArrastre && !movio) {
         manejarClic(e);
         sonidoClic();
       }
     }
 
-    // --- Mouse ---
-    canvasPrincipal.addEventListener('mousedown', (e) => {
-      e.preventDefault();
-      iniciarArrastre(e);
-    });
-
-    window.addEventListener('mousemove', (e) => {
-      moverArrastre(e);
-    });
-
-    window.addEventListener('mouseup', (e) => {
-      finalizarArrastre(e);
-    });
-
-    // --- Touch (iPad / móvil) ---
-    canvasPrincipal.addEventListener('touchstart', (e) => {
-      e.preventDefault();
-      if (e.touches.length === 2) {
-        pinchDistInicial = distanciaToques(e.touches[0], e.touches[1]);
-        radioInicialPinch = orbit.radio;
-        arrastrando = true;
-        huboMovimiento = true;
-        return;
+    canvasPrincipal.style.touchAction = 'none';
+    canvasPrincipal.addEventListener('pointerdown', onPointerDown, { passive: false });
+    canvasPrincipal.addEventListener('pointermove', onPointerMove, { passive: false });
+    canvasPrincipal.addEventListener('pointerup', onPointerUp, { passive: false });
+    canvasPrincipal.addEventListener('pointercancel', onPointerUp, { passive: false });
+    canvasPrincipal.addEventListener('lostpointercapture', (e) => {
+      pointersActivos.delete(e.pointerId);
+      if (pointersActivos.size === 0) {
+        arrastrando = false;
+        pointerIdActivo = null;
       }
-      iniciarArrastre(e);
-    }, { passive: false });
+    });
 
-    canvasPrincipal.addEventListener('touchmove', (e) => {
-      e.preventDefault();
-      moverArrastre(e);
-    }, { passive: false });
-
-    canvasPrincipal.addEventListener('touchend', (e) => {
-      e.preventDefault();
-      if (e.touches.length === 0) {
-        finalizarArrastre(e);
-      } else if (e.touches.length === 1) {
-        // Pasó de 2 a 1 dedo: reiniciar arrastre de órbita
-        iniciarArrastre(e);
-        huboMovimiento = true;
-      }
-    }, { passive: false });
-
-    canvasPrincipal.addEventListener('touchcancel', (e) => {
-      arrastrando = false;
-      pinchDistInicial = 0;
-    }, { passive: false });
+    // Evitar menú contextual en iPad
+    canvasPrincipal.addEventListener('contextmenu', (e) => e.preventDefault());
 
     canvasPrincipal.addEventListener('wheel', (e) => {
       e.preventDefault();
