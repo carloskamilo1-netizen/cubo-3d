@@ -1,4 +1,4 @@
-const NOMBRE_CACHE = 'laboratorio-3d-v1';
+const NOMBRE_CACHE = 'laboratorio-3d-v2';
 const ARCHIVOS_A_GUARDAR = [
   './',
   './index.html',

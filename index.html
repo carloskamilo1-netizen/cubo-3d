@@ -2,101 +2,44 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
-  <meta http-equiv="Pragma" content="no-cache">
-  <meta http-equiv="Expires" content="0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
   <title>Laboratorio 3D</title>
-  <!-- VERSION: 2026-09-08-v4-nozoom -->
   <link rel="manifest" href="manifest.json">
   <meta name="theme-color" content="#7b2ff7">
   <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Laboratorio 3D">
   <link rel="apple-touch-icon" href="icono-192.png">
   <script>
-    // VERSION DEL JUEGO: 2026-09-08-v4-nozoom
-    window.LAB3D_VERSION = '2026-09-08-v4-nozoom';
-    console.log('Laboratorio 3D versión', window.LAB3D_VERSION);
-    // Quitar solo el service worker de ESTA página (no toca bancos ni otros sitios)
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.getRegistrations().then(regs => {
-        regs.forEach(r => r.unregister());
-      }).catch(() => {});
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('service-worker.js').catch(() => {});
+      });
     }
-    if (window.caches) {
-      caches.keys().then(keys => keys.forEach(k => caches.delete(k))).catch(() => {});
-    }
-    // Bloquear zoom de página de Safari (pellizco / doble toque / gesture)
-    document.addEventListener('gesturestart', function (e) { e.preventDefault(); }, { passive: false });
-    document.addEventListener('gesturechange', function (e) { e.preventDefault(); }, { passive: false });
-    document.addEventListener('gestureend', function (e) { e.preventDefault(); }, { passive: false });
-    // Evitar zoom por doble toque en iOS
-    var lastTouchEnd = 0;
-    document.addEventListener('touchend', function (e) {
-      var now = Date.now();
-      if (now - lastTouchEnd <= 300) {
-        e.preventDefault();
-      }
-      lastTouchEnd = now;
-    }, { passive: false });
   </script>
   <style>
-    /* --- ESTILOS COMPACTOS + SOPORTE IPAD/TOUCH --- */
+    /* --- ESTILOS COMPACTOS Y ESTABLES (igual que la versión estable) --- */
     * {
       box-sizing: border-box;
       margin: 0;
       padding: 0;
-      -webkit-tap-highlight-color: transparent;
-      -webkit-touch-callout: none;
-      -webkit-user-select: none;
-      user-select: none;
-    }
-    input, textarea {
-      -webkit-user-select: text;
-      user-select: text;
     }
     html, body {
-      height: 100%;
+      height: 100vh;
       height: 100dvh;
-      max-height: 100dvh;
-      overflow: hidden;
+      overflow-y: auto;
+      overflow-x: hidden;
       background: #0b0620;
       font-family: 'Segoe UI', Tahoma, sans-serif;
       color: white;
-      position: fixed;
-      inset: 0;
-      width: 100%;
-      overscroll-behavior: none;
-      -webkit-text-size-adjust: 100%;
     }
     #app {
       display: flex;
       flex-direction: column;
-      height: 100%;
-      max-height: 100dvh;
-      padding: 4px 10px;
-      padding-top: max(4px, env(safe-area-inset-top, 0px));
-      padding-bottom: max(6px, env(safe-area-inset-bottom, 0px));
-      padding-left: max(10px, env(safe-area-inset-left, 0px));
-      padding-right: max(10px, env(safe-area-inset-right, 0px));
-      overflow: hidden;
-    }
-    #pantalla-juego {
-      flex-direction: column;
-      flex: 1 1 auto;
-      min-height: 0;
-      overflow: hidden;
-    }
-    #controles-inferiores {
-      flex: 0 0 auto;
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-      padding-top: 4px;
-      background: rgba(11, 6, 32, 0.95);
-      z-index: 20;
+      min-height: 100vh;
+      min-height: 100dvh;
+      padding: 6px 12px;
+      padding-bottom: max(10px, env(safe-area-inset-bottom));
     }
     header {
       display: flex;
@@ -133,11 +76,9 @@
     #contenedor-escenas {
       display: flex;
       flex: 1 1 auto;
-      gap: 10px;
+      gap: 14px;
       min-height: 0;
-      max-height: 100%;
       width: 100%;
-      overflow: hidden;
     }
     .tarjeta-canvas {
       background: rgba(10, 5, 25, 0.6);
@@ -156,8 +97,7 @@
     }
     .tarjeta-canvas.objetivo {
       flex: 0 0 32%;
-      min-width: 0;
-      max-width: 40%;
+      min-width: 280px;
     }
     .tarjeta-canvas canvas {
       display: block;
@@ -284,66 +224,15 @@
     .tarjeta-mundo .progreso-mundo { font-size: 14px; color: #ccc; }
     .candado { font-size: 24px; margin-left: 8px; }
 
-    /* Canvas: evita gestos del navegador sobre el área 3D */
-    #canvas-principal, #canvas-objetivo, .tarjeta-canvas, #contenedor-escenas, #pantalla-juego, #app {
-      touch-action: none;
-      -webkit-user-select: none;
-      user-select: none;
-      -webkit-touch-callout: none;
-    }
-    #canvas-principal {
-      /* iOS: evita magnifier / callout al mantener pulsado */
-      -webkit-user-drag: none;
-    }
-    .boton-emoji, .boton-accion, .tarjeta-mundo {
-      touch-action: manipulation;
-      -webkit-user-select: none;
-      user-select: none;
-    }
-    /* Barras inferiores siempre visibles */
-    .barra {
-      flex-shrink: 0;
-      z-index: 5;
-    }
-
-    /* Tablets / iPad (ancho típico) */
-    @media (max-width: 1024px) {
-      header h1 { font-size: 20px; }
-      #panel-nivel h2 { font-size: 16px; }
-      #progreso { font-size: 14px; }
-      .tarjeta-canvas.objetivo { flex: 0 0 30%; min-width: 180px; }
-      .boton-emoji { width: 48px; height: 48px; font-size: 24px; }
-      .boton-accion { font-size: 14px; padding: 6px 12px; }
-    }
-
-    /* Pantallas bajas (iPad landscape o móviles): priorizar botones visibles */
-    @media (max-height: 700px) {
-      header { padding: 2px 12px; margin-bottom: 2px; }
-      header h1 { font-size: 16px; }
-      #panel-nivel h2 { font-size: 14px; }
-      #progreso { font-size: 12px; }
-      #mensaje-ayuda { font-size: 13px; min-height: 1.2em; }
-      #mensaje-victoria { font-size: 20px; }
-      .boton-emoji { width: 42px; height: 42px; font-size: 20px; }
-      .boton-accion { font-size: 12px; padding: 4px 10px; }
-      .etiqueta-mini { font-size: 12px; margin-top: 2px; }
-      #contenedor-escenas { gap: 8px; }
-    }
-
     @media (max-width: 700px) {
       header h1 { font-size: 18px; }
-      .tarjeta-canvas.objetivo { flex: 0 0 40%; min-width: 120px; }
+      .tarjeta-canvas.objetivo { flex: 0 0 40%; min-width: 150px; }
       .boton-emoji { width: 44px; height: 44px; font-size: 22px; }
       .boton-accion { font-size: 13px; padding: 4px 10px; }
       #panel-nivel h2 { font-size: 16px; }
       #progreso { font-size: 14px; }
       .tarjeta-mundo { width: 150px; padding: 15px; }
       .tarjeta-mundo .emoji-mundo { font-size: 36px; }
-      #contenedor-escenas {
-        flex-direction: column;
-      }
-      .tarjeta-canvas.principal { flex: 1 1 55%; min-height: 0; }
-      .tarjeta-canvas.objetivo { flex: 0 0 28%; min-width: 0; width: 100%; }
     }
   </style>
 </head>
@@ -352,7 +241,6 @@
     <header>
       <h1>🧩 Laboratorio 3D</h1>
       <button class="boton-accion" id="btn-inicio" style="background:#7b2ff7; padding:4px 12px; font-size:14px;">🏠 Inicio</button>
-      <span id="badge-version" style="margin-left:auto;font-size:11px;opacity:0.7;color:#7ef9ff;">2026-09-08-v4-nozoom</span>
     </header>
 
     <!-- PANTALLA DE MUNDOS -->
@@ -362,7 +250,7 @@
     </div>
 
     <!-- PANTALLA DE JUEGO -->
-    <div id="pantalla-juego">
+    <div id="pantalla-juego" style="display: flex; flex-direction: column; flex: 1; min-height: 0;">
       <div id="panel-nivel">
         <h2 id="titulo-nivel"></h2>
         <div id="progreso"></div>
@@ -378,16 +266,15 @@
         </div>
       </div>
 
-      <div id="controles-inferiores">
-        <div id="mensaje-victoria">⭐ ¡MUY BIEN! ⭐</div>
-        <div id="mensaje-ayuda">Toca una pieza, luego toca otra vez para confirmar el emoji.</div>
-        <div class="barra" id="barra-emojis"></div>
-        <div class="barra">
-          <button class="boton-accion" id="btn-reiniciar">🔄 Reiniciar</button>
-          <button class="boton-accion" id="btn-undo">↩ Deshacer</button>
-          <button class="boton-accion" id="btn-pista">💡 Pista</button>
-          <button class="boton-accion" id="btn-siguiente">➡ Siguiente</button>
-        </div>
+      <div id="mensaje-victoria">⭐ ¡MUY BIEN! ⭐</div>
+      <div id="mensaje-ayuda">Toca una pieza, luego toca otra vez para confirmar el emoji.</div>
+
+      <div class="barra" id="barra-emojis"></div>
+      <div class="barra">
+        <button class="boton-accion" id="btn-reiniciar">🔄 Reiniciar</button>
+        <button class="boton-accion" id="btn-undo">↩ Deshacer</button>
+        <button class="boton-accion" id="btn-pista">💡 Pista</button>
+        <button class="boton-accion" id="btn-siguiente">➡ Siguiente</button>
       </div>
     </div>
   </div>
@@ -975,151 +862,82 @@
     }
 
     // ============================================================
-    // 10. INTERACCIÓN CON POINTER EVENTS (ratón + dedo iPad)
+    // 10. INTERACCIÓN CON EL MOUSE
     // ============================================================
     const raycaster = new THREE.Raycaster();
     const mouseNDC = new THREE.Vector2();
     let arrastrando = false;
-    let pointerIdActivo = null;
     let inicioArrastre = { x: 0, y: 0 };
     let anguloInicio = { theta: 0, phi: 0 };
     let huboMovimiento = false;
-    let pinchDistInicial = 0;
-    let radioInicialPinch = 0;
-    const pointersActivos = new Map();
 
-    function getClientXY(e) {
-      if (e.clientX != null) return { x: e.clientX, y: e.clientY };
-      if (e.touches && e.touches.length > 0) {
-        return { x: e.touches[0].clientX, y: e.touches[0].clientY };
-      }
-      if (e.changedTouches && e.changedTouches.length > 0) {
-        return { x: e.changedTouches[0].clientX, y: e.changedTouches[0].clientY };
-      }
-      return { x: 0, y: 0 };
-    }
-
-    function actualizarOrbitDesdePuntero(x, y) {
-      const dx = x - inicioArrastre.x;
-      const dy = y - inicioArrastre.y;
-      if (Math.abs(dx) > 10 || Math.abs(dy) > 10) huboMovimiento = true;
-      orbit.theta = anguloInicio.theta - dx * 0.01;
-      orbit.phi = Math.min(Math.max(anguloInicio.phi - dy * 0.01, 0.25), Math.PI - 0.25);
-    }
-
-    function onPointerDown(e) {
-      // Solo botón principal / toque
-      if (e.pointerType === 'mouse' && e.button !== 0) return;
-      e.preventDefault();
-      try { canvasPrincipal.setPointerCapture(e.pointerId); } catch (_) {}
-
-      pointersActivos.set(e.pointerId, { x: e.clientX, y: e.clientY });
-
-      if (pointersActivos.size === 2) {
-        const pts = Array.from(pointersActivos.values());
-        const dx = pts[0].x - pts[1].x;
-        const dy = pts[0].y - pts[1].y;
-        pinchDistInicial = Math.sqrt(dx * dx + dy * dy) || 1;
-        radioInicialPinch = orbit.radio;
-        huboMovimiento = true;
-        arrastrando = true;
-        pointerIdActivo = null;
-        return;
-      }
-
+    canvasPrincipal.addEventListener('mousedown', (e) => {
       arrastrando = true;
-      pointerIdActivo = e.pointerId;
       huboMovimiento = false;
       inicioArrastre = { x: e.clientX, y: e.clientY };
       anguloInicio = { theta: orbit.theta, phi: orbit.phi };
-    }
+    });
 
-    function onPointerMove(e) {
+    window.addEventListener('mousemove', (e) => {
       if (!arrastrando) return;
-      e.preventDefault();
+      const dx = e.clientX - inicioArrastre.x;
+      const dy = e.clientY - inicioArrastre.y;
+      if (Math.abs(dx) > 4 || Math.abs(dy) > 4) huboMovimiento = true;
+      orbit.theta = anguloInicio.theta - dx * 0.008;
+      orbit.phi = Math.min(Math.max(anguloInicio.phi - dy * 0.008, 0.3), Math.PI - 0.3);
+    });
 
-      if (pointersActivos.has(e.pointerId)) {
-        pointersActivos.set(e.pointerId, { x: e.clientX, y: e.clientY });
-      }
-
-      if (pointersActivos.size === 2) {
-        // Solo zoom de cámara 3D (no de la página). Requiere cambio claro de distancia.
-        const pts = Array.from(pointersActivos.values());
-        const dx = pts[0].x - pts[1].x;
-        const dy = pts[0].y - pts[1].y;
-        const d = Math.sqrt(dx * dx + dy * dy) || 1;
-        if (pinchDistInicial > 0) {
-          const ratio = pinchDistInicial / d;
-          // Ignorar micro-movimientos (dedo tembloroso / apoyo accidental)
-          if (Math.abs(ratio - 1) > 0.04) {
-            orbit.radio = Math.min(Math.max(radioInicialPinch * ratio, 4), 14);
-          }
-        }
-        huboMovimiento = true;
-        return;
-      }
-
-      if (pointerIdActivo !== null && e.pointerId !== pointerIdActivo) return;
-      actualizarOrbitDesdePuntero(e.clientX, e.clientY);
-    }
-
-    function onPointerUp(e) {
-      e.preventDefault();
-      pointersActivos.delete(e.pointerId);
-      try { canvasPrincipal.releasePointerCapture(e.pointerId); } catch (_) {}
-
-      if (pointersActivos.size === 1) {
-        // Queda un dedo: reiniciar órbita con ese puntero
-        const [id, pt] = Array.from(pointersActivos.entries())[0];
-        pointerIdActivo = id;
-        inicioArrastre = { x: pt.x, y: pt.y };
-        anguloInicio = { theta: orbit.theta, phi: orbit.phi };
-        pinchDistInicial = 0;
-        huboMovimiento = true;
-        return;
-      }
-
-      if (pointersActivos.size > 0) return;
-
-      const fueArrastre = arrastrando;
-      const movio = huboMovimiento;
+    window.addEventListener('mouseup', (e) => {
+      if (!arrastrando) return;
       arrastrando = false;
-      pointerIdActivo = null;
-      pinchDistInicial = 0;
-
-      if (fueArrastre && !movio) {
+      if (!huboMovimiento) {
         manejarClic(e);
         sonidoClic();
       }
-    }
-
-    canvasPrincipal.style.touchAction = 'none';
-    canvasPrincipal.addEventListener('pointerdown', onPointerDown, { passive: false });
-    canvasPrincipal.addEventListener('pointermove', onPointerMove, { passive: false });
-    canvasPrincipal.addEventListener('pointerup', onPointerUp, { passive: false });
-    canvasPrincipal.addEventListener('pointercancel', onPointerUp, { passive: false });
-    canvasPrincipal.addEventListener('lostpointercapture', (e) => {
-      pointersActivos.delete(e.pointerId);
-      if (pointersActivos.size === 0) {
-        arrastrando = false;
-        pointerIdActivo = null;
-      }
     });
-
-    // Evitar menú contextual en iPad
-    canvasPrincipal.addEventListener('contextmenu', (e) => e.preventDefault());
 
     canvasPrincipal.addEventListener('wheel', (e) => {
       e.preventDefault();
       orbit.radio = Math.min(Math.max(orbit.radio + e.deltaY * 0.01, 4), 14);
     }, { passive: false });
 
+    // --- Soporte tactil (iPad/movil): misma logica que el mouse ---
+    canvasPrincipal.addEventListener('touchstart', (e) => {
+      e.preventDefault();
+      const t = e.touches[0];
+      arrastrando = true;
+      huboMovimiento = false;
+      inicioArrastre = { x: t.clientX, y: t.clientY };
+      anguloInicio = { theta: orbit.theta, phi: orbit.phi };
+    }, { passive: false });
+
+    canvasPrincipal.addEventListener('touchmove', (e) => {
+      e.preventDefault();
+      if (!arrastrando) return;
+      const t = e.touches[0];
+      const dx = t.clientX - inicioArrastre.x;
+      const dy = t.clientY - inicioArrastre.y;
+      if (Math.abs(dx) > 4 || Math.abs(dy) > 4) huboMovimiento = true;
+      orbit.theta = anguloInicio.theta - dx * 0.008;
+      orbit.phi = Math.min(Math.max(anguloInicio.phi - dy * 0.008, 0.3), Math.PI - 0.3);
+    }, { passive: false });
+
+    canvasPrincipal.addEventListener('touchend', (e) => {
+      e.preventDefault();
+      if (!arrastrando) return;
+      arrastrando = false;
+      if (!huboMovimiento) {
+        const t = e.changedTouches[0];
+        manejarClic({ clientX: t.clientX, clientY: t.clientY });
+        sonidoClic();
+      }
+    }, { passive: false });
+
     function manejarClic(e) {
       if (figuraCompletada) return;
       const rect = canvasPrincipal.getBoundingClientRect();
-      const p = getClientXY(e);
-      mouseNDC.x = ((p.x - rect.left) / rect.width) * 2 - 1;
-      mouseNDC.y = -((p.y - rect.top) / rect.height) * 2 + 1;
+      mouseNDC.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+      mouseNDC.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
       raycaster.setFromCamera(mouseNDC, camaraPrincipal);
       const intersecciones = raycaster.intersectObjects(Object.values(cubosGrid));
       if (intersecciones.length === 0) {
